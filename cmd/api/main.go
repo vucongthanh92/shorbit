@@ -12,6 +12,8 @@ import (
 	"github.com/vucongthanh92/shortbit/internal/config"
 	"github.com/vucongthanh92/shortbit/internal/platform/cache"
 	"github.com/vucongthanh92/shortbit/internal/platform/database"
+	"github.com/vucongthanh92/shortbit/internal/share/application"
+	"github.com/vucongthanh92/shortbit/internal/share/repository"
 	sharehttp "github.com/vucongthanh92/shortbit/internal/share/transport/http"
 )
 
@@ -25,7 +27,12 @@ func main() {
 	redisCache := cache.NewRedis(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.CacheTTL)
 	defer redisCache.Close()
 
-	router := sharehttp.NewRouter(db, redisCache)
+	worker := application.NewViewWorker(repository.NewPostgres(db), 1_000)
+	workerContext, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	worker.Start(workerContext)
+
+	router := sharehttp.NewRouter(db, redisCache, worker)
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: router, ReadHeaderTimeout: 5 * time.Second}
 
 	go func() {

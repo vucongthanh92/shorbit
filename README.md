@@ -13,7 +13,7 @@ Repository này mới là backend foundation để review kiến trúc trước 
 - Sinh short code URL-safe bằng `crypto/rand`.
 - Ranh giới service sẵn sàng thay phần ghi view trực tiếp bằng event/outbox worker.
 
-Chưa triển khai ở bản này: authentication/ownership, tạo và revoke link qua API, worker/outbox đếm view, rate limiting, migration runner và frontend React. Đây là các hạng mục tiếp theo để cùng review trước khi code chi tiết.
+MVP đã có ownership qua `X-User-ID`, create/update/revoke link API và in-process async view worker. Chưa triển khai: tích hợp identity/JWT thực tế, transactional outbox có độ bền liên tiến trình, rate limiting, migration runner, unique-view analytics và frontend React.
 
 ## Kiến trúc
 
@@ -144,21 +144,54 @@ Sau đó kiểm tra:
 curl -i http://localhost:8080/healthz
 ```
 
-## API hiện có
+## API MVP
 
 ```http
-GET /healthz
-GET /api/v1/shares/:shortCode
+GET    /healthz
+POST   /api/v1/submissions
+PATCH  /api/v1/submissions/:submissionID/sharing
+POST   /api/v1/submissions/:submissionID/share-links
+PATCH  /api/v1/share-links/:shareLinkID
+DELETE /api/v1/share-links/:shareLinkID
+GET    /api/v1/share-links/:shareLinkID/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD
+GET    /api/v1/shares/:shortCode
 ```
 
-Response của resolve link chỉ trả bài làm nếu link và bài làm cùng khả dụng. Các endpoint dự kiến ở bước tiếp theo:
+Các API quản trị yêu cầu header sau trong MVP:
 
 ```http
-POST  /api/v1/submissions/:submissionId/share-links
-PATCH /api/v1/share-links/:shareLinkId
-DELETE /api/v1/share-links/:shareLinkId
-GET    /api/v1/share-links/:shareLinkId/analytics
+X-User-ID: <UUID>
 ```
+
+Header này là adapter tạm thời để test bằng Postman. Khi tích hợp YouPass identity service, middleware sẽ thay bằng JWT/session claims nhưng use case ownership không thay đổi.
+
+Ví dụ luồng Postman:
+
+```http
+POST /api/v1/submissions
+X-User-ID: 11111111-1111-1111-1111-111111111111
+Content-Type: application/json
+
+{"title":"Bài kiểm tra Toán","content":{"score":10},"shareEnabled":true}
+```
+
+Sau đó dùng `id` trả về để gọi `POST /submissions/:submissionID/share-links`.
+
+`GET /shares/:shortCode` không yêu cầu đăng nhập với link `public`; link `authenticated` yêu cầu `X-User-ID`. `restricted` được schema hỗ trợ nhưng MVP từ chối resolve cho đến khi có bảng/mapping nhóm người dùng.
+
+## Clean architecture
+
+```text
+domain/        entities, invariants, repository/cache ports
+application/   use cases: submission, share link, view worker
+repository/    PostgreSQL implementation của repository ports
+transport/http Gin handlers, request validation, HTTP mapping, temporary identity adapter
+platform/      Redis/PostgreSQL low-level adapters
+```
+
+Dependency luôn hướng vào trong: HTTP và PostgreSQL phụ thuộc use case/domain, còn domain không phụ thuộc Gin, GORM hay Redis.
+
+MVP dùng convention khởi tạo của Courier: `main.go → startup → internal.InitializeContainer`. Dependencies được nối trong `internal/wire.go` và output được generate tại `internal/wire_gen.go`. Chạy `make wire` sau khi thay đổi constructor/dependency graph.
 
 ## Kế hoạch implementation tiếp theo
 
