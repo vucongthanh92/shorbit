@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/vucongthanh92/shortbit/internal/share/domain"
-	"time"
 )
 
 type LinkUseCase struct {
