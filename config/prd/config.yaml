@@ -1,0 +1,7 @@
+serviceName: shortbit
+development: false
+http: { port: :8080, development: false, shutdownTimeout: 15, resources: [], allowOrigins: [] }
+logger: { level: info, devMode: false, encoder: json }
+tracing: { enable: true, serviceName: shortbit, hostPort: "localhost:4317", logSpans: false }
+redis: { addrs: ["localhost:6379"], password: "", db: 0, poolSize: 100 }
+cacheTTLSeconds: 300

@@ -132,11 +132,10 @@ Structure tham chiếu cách tổ chức từ `go-base-project`; dependency loca
 Yêu cầu: Go 1.22.7+, PostgreSQL và Redis.
 
 ```bash
-cp config/local.env.example .env
-set -a; source .env; set +a
-go mod tidy
-go run ./cmd/api
+make run-local
 ```
+
+Lệnh này tương đương `go run main.go start --config=./config/local/config.yaml`. Theo convention Courier, có thể chọn config khác bằng `APP_ENV=dev make run-local` hoặc truyền `--config` trực tiếp.
 
 Sau đó kiểm tra:
 
@@ -178,6 +177,122 @@ Content-Type: application/json
 Sau đó dùng `id` trả về để gọi `POST /submissions/:submissionID/share-links`.
 
 `GET /shares/:shortCode` không yêu cầu đăng nhập với link `public`; link `authenticated` yêu cầu `X-User-ID`. `restricted` được schema hỗ trợ nhưng MVP từ chối resolve cho đến khi có bảng/mapping nhóm người dùng.
+
+## Test API bằng cURL / Postman
+
+Khởi động service:
+
+```bash
+make run-local
+```
+
+Khai báo biến dùng chung. Postman có thể import trực tiếp từng lệnh cURL bên dưới.
+
+```bash
+export BASE_URL="http://localhost:8080"
+export USER_ID="11111111-1111-1111-1111-111111111111"
+```
+
+### 1. Tạo bài làm
+
+```bash
+curl --request POST "$BASE_URL/api/v1/submissions" \
+  --header "Content-Type: application/json" \
+  --header "X-User-ID: $USER_ID" \
+  --data '{
+    "title": "Bài kiểm tra Toán",
+    "content": {"score": 10, "answers": [{"question": 1, "answer": "A"}]},
+    "shareEnabled": true
+  }'
+```
+
+Lưu `id` trả về vào `SUBMISSION_ID`.
+
+### 2. Bật hoặc tắt chia sẻ của bài làm
+
+```bash
+curl --request PATCH "$BASE_URL/api/v1/submissions/$SUBMISSION_ID/sharing" \
+  --header "Content-Type: application/json" \
+  --header "X-User-ID: $USER_ID" \
+  --data '{"enabled": false}'
+```
+
+Khi tắt, cache của mọi link thuộc bài làm được invalidated; public resolve trả `404` ngay sau đó.
+
+### 3. Tạo link chia sẻ public
+
+```bash
+curl --request POST "$BASE_URL/api/v1/submissions/$SUBMISSION_ID/share-links" \
+  --header "Content-Type: application/json" \
+  --header "X-User-ID: $USER_ID" \
+  --data '{"accessLevel": "public"}'
+```
+
+Lưu `id` và `shortCode` trả về vào `SHARE_LINK_ID`, `SHORT_CODE`.
+
+### 4. Tạo link có thời hạn hoặc yêu cầu đăng nhập
+
+```bash
+curl --request POST "$BASE_URL/api/v1/submissions/$SUBMISSION_ID/share-links" \
+  --header "Content-Type: application/json" \
+  --header "X-User-ID: $USER_ID" \
+  --data '{
+    "accessLevel": "authenticated",
+    "expiresAt": "2026-12-31T23:59:59Z"
+  }'
+```
+
+### 5. Cập nhật link
+
+```bash
+curl --request PATCH "$BASE_URL/api/v1/share-links/$SHARE_LINK_ID" \
+  --header "Content-Type: application/json" \
+  --header "X-User-ID: $USER_ID" \
+  --data '{
+    "accessLevel": "authenticated",
+    "expiresAt": "2026-12-31T23:59:59Z"
+  }'
+```
+
+### 6. Resolve link public
+
+```bash
+curl --request GET "$BASE_URL/api/v1/shares/$SHORT_CODE"
+```
+
+Với link `authenticated`, thêm header sau:
+
+```bash
+curl --request GET "$BASE_URL/api/v1/shares/$SHORT_CODE" \
+  --header "X-User-ID: $USER_ID"
+```
+
+### 7. Xem analytics
+
+```bash
+curl --request GET "$BASE_URL/api/v1/share-links/$SHARE_LINK_ID/analytics" \
+  --header "X-User-ID: $USER_ID"
+```
+
+Hoặc giới hạn ngày:
+
+```bash
+curl --request GET "$BASE_URL/api/v1/share-links/$SHARE_LINK_ID/analytics?from=2026-10-01&to=2026-10-31" \
+  --header "X-User-ID: $USER_ID"
+```
+
+### 8. Revoke link
+
+```bash
+curl --request DELETE "$BASE_URL/api/v1/share-links/$SHARE_LINK_ID" \
+  --header "X-User-ID: $USER_ID"
+```
+
+### 9. Health check
+
+```bash
+curl --request GET "$BASE_URL/healthz"
+```
 
 ## Clean architecture
 

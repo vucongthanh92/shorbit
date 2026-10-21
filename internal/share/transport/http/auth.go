@@ -1,9 +1,10 @@
 package http
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"net/http"
 )
 
 const actorKey = "actorID"
@@ -20,7 +21,11 @@ func requireActor() gin.HandlerFunc {
 		c.Next()
 	}
 }
-func actor(c *gin.Context) uuid.UUID { return c.MustGet(actorKey).(uuid.UUID) }
+
+func actor(c *gin.Context) uuid.UUID {
+	return c.MustGet(actorKey).(uuid.UUID)
+}
+
 func optionalActor(c *gin.Context) *uuid.UUID {
 	id, e := uuid.Parse(c.GetHeader("X-User-ID"))
 	if e != nil {

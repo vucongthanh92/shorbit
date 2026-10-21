@@ -2,16 +2,22 @@ package startup
 
 import (
 	"context"
+	"github.com/vucongthanh92/go-base-utils/command"
+	"github.com/vucongthanh92/shortbit/config"
 	"github.com/vucongthanh92/shortbit/internal"
-	"github.com/vucongthanh92/shortbit/internal/config"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
+var cfg *config.AppConfig
+
 func Execute() {
-	cfg := config.Load()
+	cfg = &config.AppConfig{}
+	command.UseCommands(command.WithStartCommand(start, cfg))
+}
+func start() {
 	container, err := internal.InitializeContainer(cfg)
 	if err != nil {
 		log.Fatal(err)
